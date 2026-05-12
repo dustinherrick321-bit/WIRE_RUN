@@ -1,0 +1,1180 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>WIRE RUN</title>
+<style>
+  @import url('https://fonts.googleapis.com/css2?family=Share+Tech+Mono&family=Orbitron:wght@400;700;900&display=swap');
+  * { margin:0; padding:0; box-sizing:border-box; }
+  body { background:#000; overflow:hidden; font-family:'Share Tech Mono', monospace; }
+  canvas { display:block; }
+  #ui {
+    position:absolute; top:0; left:0; width:100%; pointer-events:none;
+    display:flex; justify-content:space-between; align-items:flex-start; padding:18px 28px;
+  }
+  .ui-val {
+    font-family:'Orbitron', monospace; color:#00ff41; font-size:22px; font-weight:700;
+    text-shadow: 0 0 10px #00ff41, 0 0 30px #00ff4166;
+    letter-spacing:3px;
+  }
+  .ui-label { color:#00ff4188; font-size:11px; letter-spacing:4px; margin-bottom:2px; }
+  #overlay {
+    position:absolute; inset:0; background:#000;
+    display:flex; flex-direction:column; align-items:center; justify-content:center;
+    z-index:10;
+  }
+  #overlay h1 {
+    font-family:'Orbitron', monospace; font-size:72px; font-weight:900;
+    color:#00ff41; letter-spacing:12px;
+    text-shadow: 0 0 20px #00ff41, 0 0 60px #00ff4188, 0 0 100px #00ff4144;
+    margin-bottom:8px;
+  }
+  #overlay .sub {
+    color:#00ff4188; font-size:13px; letter-spacing:6px; margin-bottom:48px;
+  }
+  #overlay .info {
+    color:#00ff4166; font-size:12px; letter-spacing:2px; margin-bottom:40px; text-align:center; line-height:2;
+  }
+  #startBtn {
+    font-family:'Orbitron', monospace; font-size:16px; font-weight:700;
+    letter-spacing:6px; color:#000; background:#00ff41;
+    border:none; padding:16px 48px; cursor:pointer;
+    clip-path: polygon(8px 0%, 100% 0%, calc(100% - 8px) 100%, 0% 100%);
+    transition: all 0.15s;
+  }
+  #startBtn:hover { background:#fff; box-shadow: 0 0 40px #00ff41; }
+
+  #minigame-overlay {
+    position:absolute; inset:0; background:#000ee0008a;
+    display:none; flex-direction:column; align-items:center; justify-content:center;
+    z-index:20; backdrop-filter: brightness(0.3);
+  }
+  #minigame-overlay.active { display:flex; }
+  #mg-box {
+    border:1.5px solid #00ff41; padding:40px 56px;
+    background:#000; min-width:480px; text-align:center;
+    box-shadow: 0 0 40px #00ff4133, inset 0 0 40px #00ff4108;
+    position:relative;
+  }
+  #mg-box::before, #mg-box::after {
+    content:''; position:absolute; width:12px; height:12px;
+    border-color:#00ff41; border-style:solid;
+  }
+  #mg-box::before { top:-1px; left:-1px; border-width:2px 0 0 2px; }
+  #mg-box::after  { bottom:-1px; right:-1px; border-width:0 2px 2px 0; }
+  #mg-title {
+    font-family:'Orbitron', monospace; font-size:26px; font-weight:700;
+    color:#00ff41; letter-spacing:6px; margin-bottom:6px;
+    text-shadow: 0 0 16px #00ff41;
+  }
+  #mg-desc { color:#00ff4188; font-size:12px; letter-spacing:2px; margin-bottom:28px; }
+  #mg-canvas { border:1px solid #00ff4144; display:block; margin:0 auto; }
+  #mg-result {
+    margin-top:20px; font-family:'Orbitron', monospace;
+    font-size:18px; letter-spacing:4px; min-height:28px;
+  }
+  #mg-result.win  { color:#00ff41; text-shadow:0 0 16px #00ff41; }
+  #mg-result.lose { color:#ff2244; text-shadow:0 0 16px #ff2244; }
+
+  #gameover {
+    position:absolute; inset:0; background:#000;
+    display:none; flex-direction:column; align-items:center; justify-content:center;
+    z-index:30;
+  }
+  #gameover.active { display:flex; }
+  #gameover h2 {
+    font-family:'Orbitron', monospace; font-size:56px; font-weight:900;
+    color:#ff2244; letter-spacing:8px;
+    text-shadow: 0 0 20px #ff2244, 0 0 60px #ff224488;
+    margin-bottom:16px;
+  }
+  #gameover .score-line {
+    font-family:'Orbitron', monospace; color:#00ff41; font-size:18px;
+    letter-spacing:4px; margin-bottom:40px;
+  }
+  #restartBtn {
+    font-family:'Orbitron', monospace; font-size:14px; font-weight:700;
+    letter-spacing:6px; color:#000; background:#00ff41;
+    border:none; padding:14px 40px; cursor:pointer;
+    clip-path: polygon(8px 0%, 100% 0%, calc(100% - 8px) 100%, 0% 100%);
+  }
+  #restartBtn:hover { background:#fff; }
+
+  #mg-progress {
+    position:absolute; top:18px; left:50%; transform:translateX(-50%);
+    display:none; gap:8px; align-items:center;
+  }
+  #mg-progress.visible { display:flex; }
+  .mg-pip {
+    width:8px; height:8px; border:1px solid #00ff41;
+    transition: background 0.3s;
+  }
+  .mg-pip.done { background:#00ff41; }
+</style>
+</head>
+<body>
+
+<canvas id="main"></canvas>
+
+<div id="ui">
+  <div>
+    <div class="ui-label">SCORE</div>
+    <div class="ui-val" id="scoreVal">0</div>
+  </div>
+  <div style="text-align:center">
+    <div class="ui-label">NEXT TRIAL</div>
+    <div class="ui-val" id="nextVal">--</div>
+  </div>
+  <div style="text-align:right">
+    <div class="ui-label">BEST</div>
+    <div class="ui-val" id="bestVal">0</div>
+  </div>
+</div>
+
+<div id="mg-progress">
+  <div class="mg-pip" id="pip0"></div>
+  <div class="mg-pip" id="pip1"></div>
+  <div class="mg-pip" id="pip2"></div>
+</div>
+
+<div id="overlay">
+  <h1>WIRE RUN</h1>
+  <div class="sub">SURVIVE THE GRID</div>
+  <div class="info">
+    ← → ARROW KEYS &nbsp;|&nbsp; DODGE OBSTACLES<br>
+    EVERY 1000 POINTS — COMPLETE A TRIAL TO CONTINUE
+  </div>
+  <button id="startBtn">INITIALIZE</button>
+</div>
+
+<div id="minigame-overlay">
+  <div id="mg-box">
+    <div id="mg-title">TRIAL</div>
+    <div id="mg-desc">description</div>
+    <canvas id="mg-canvas" width="400" height="300"></canvas>
+    <div id="mg-result"></div>
+  </div>
+</div>
+
+<div id="gameover">
+  <h2>TERMINATED</h2>
+  <div class="score-line" id="goScore"></div>
+  <button id="restartBtn">RESTART</button>
+</div>
+
+<script>
+// ─── MAIN CANVAS SETUP ───────────────────────────────────────────────────────
+const mainCanvas = document.getElementById('main');
+const mc = mainCanvas.getContext('2d');
+mainCanvas.width = window.innerWidth;
+mainCanvas.height = window.innerHeight;
+const W = mainCanvas.width, H = mainCanvas.height;
+
+// ─── GAME STATE ───────────────────────────────────────────────────────────────
+let gameState = 'title'; // title | playing | minigame | gameover
+let score = 0, best = 0, frame = 0;
+let speed = 4.5;
+let ballX = W / 2, ballTargetX = W / 2;
+let ballVX = 0;
+let leftDown = false, rightDown = false;
+let nextTrialScore = 1000;
+let trialCount = 0;
+let mgActive = false;
+let deathFlash = 0;
+
+// ─── TRACK / OBSTACLES ───────────────────────────────────────────────────────
+const TRACK_W_NEAR = W * 0.72;
+const TRACK_W_FAR  = W * 0.09;
+const HORIZON_Y    = H * 0.30;
+const TRACK_NEAR_Y = H;
+const BALL_Y       = H * 0.70;
+const BALL_R       = W * 0.038;
+
+let trackSegments = [];
+let obstacles = [];
+let particles = [];
+
+// Build initial scrolling track grid
+function initTrack() {
+  trackSegments = [];
+  for (let i = 0; i < 30; i++) {
+    trackSegments.push({ z: i / 30 });
+  }
+}
+
+// ─── PERSPECTIVE HELPERS ──────────────────────────────────────────────────────
+function perspX(worldX, z) {
+  // z: 0=horizon, 1=near
+  const trackW = TRACK_W_FAR + (TRACK_W_FAR + (TRACK_W_NEAR - TRACK_W_FAR)) * z - TRACK_W_FAR;
+  const halfW = TRACK_W_FAR / 2 + (TRACK_W_NEAR / 2 - TRACK_W_FAR / 2) * z;
+  return W / 2 + worldX * halfW;
+}
+function perspY(z) {
+  return HORIZON_Y + (TRACK_NEAR_Y - HORIZON_Y) * z;
+}
+function trackLeft(z)  { return W/2 - (TRACK_W_FAR/2 + (TRACK_W_NEAR/2 - TRACK_W_FAR/2) * z); }
+function trackRight(z) { return W/2 + (TRACK_W_FAR/2 + (TRACK_W_NEAR/2 - TRACK_W_FAR/2) * z); }
+
+// ─── DRAW MAIN SCENE ──────────────────────────────────────────────────────────
+function drawScene() {
+  mc.clearRect(0, 0, W, H);
+  mc.fillStyle = '#000';
+  mc.fillRect(0, 0, W, H);
+
+  // side walls
+  drawWalls();
+  // track grid
+  drawTrackGrid();
+  // obstacles
+  for (const o of obstacles) drawObstacle(o);
+  // ball
+  drawBall();
+  // particles
+  drawParticles();
+
+  if (deathFlash > 0) {
+    mc.fillStyle = `rgba(255,20,50,${deathFlash * 0.35})`;
+    mc.fillRect(0, 0, W, H);
+    deathFlash -= 0.08;
+  }
+}
+
+function drawWalls() {
+  const G = '#00ff41';
+  const cols = 10;
+  const rows = 8;
+
+  // LEFT WALL
+  for (let r = 0; r <= rows; r++) {
+    const t = r / rows;
+    const y0 = HORIZON_Y + (H - HORIZON_Y) * t * 1.3;
+    const y1 = HORIZON_Y + (H - HORIZON_Y) * Math.min((t + 1/rows), 1) * 1.3;
+    const x0l = trackLeft(Math.min(t * 1.1, 1));
+    const x0r = W/2 - W*0.45 - (1-t)*W*0.1;
+    if (y0 > H * 1.1) continue;
+    mc.strokeStyle = G;
+    mc.lineWidth = 0.6;
+    mc.globalAlpha = 0.25 + t * 0.3;
+    mc.beginPath();
+    mc.moveTo(x0l, Math.min(y0, H));
+    mc.lineTo(x0r, Math.min(y0, H));
+    mc.stroke();
+  }
+  for (let c = 0; c <= cols; c++) {
+    const t = c / cols;
+    const x0 = trackLeft(0) * (1-t) + (W/2 - W*0.45) * t;
+    const x1 = trackLeft(1) * (1-t) + (W/2 - W*0.45) * t;
+    mc.strokeStyle = G;
+    mc.lineWidth = 0.6;
+    mc.globalAlpha = 0.2 + t * 0.2;
+    mc.beginPath();
+    mc.moveTo(x0, HORIZON_Y);
+    mc.lineTo(x1, H);
+    mc.stroke();
+  }
+
+  // RIGHT WALL
+  for (let r = 0; r <= rows; r++) {
+    const t = r / rows;
+    const y0 = HORIZON_Y + (H - HORIZON_Y) * t * 1.3;
+    const x0l = trackRight(Math.min(t * 1.1, 1));
+    const x0r = W/2 + W*0.45 + (1-t)*W*0.1;
+    if (y0 > H * 1.1) continue;
+    mc.strokeStyle = G;
+    mc.lineWidth = 0.6;
+    mc.globalAlpha = 0.25 + t * 0.3;
+    mc.beginPath();
+    mc.moveTo(x0l, Math.min(y0, H));
+    mc.lineTo(x0r, Math.min(y0, H));
+    mc.stroke();
+  }
+  for (let c = 0; c <= cols; c++) {
+    const t = c / cols;
+    const x0 = trackRight(0) * (1-t) + (W/2 + W*0.45) * t;
+    const x1 = trackRight(1) * (1-t) + (W/2 + W*0.45) * t;
+    mc.strokeStyle = G;
+    mc.lineWidth = 0.6;
+    mc.globalAlpha = 0.2 + t * 0.2;
+    mc.beginPath();
+    mc.moveTo(x0, HORIZON_Y);
+    mc.lineTo(x1, H);
+    mc.stroke();
+  }
+
+  mc.globalAlpha = 1;
+}
+
+function drawTrackGrid() {
+  const G = '#00ff41';
+  mc.strokeStyle = G;
+
+  // horizontal lines (scroll with frame)
+  const lineCount = 18;
+  for (let i = 0; i < lineCount; i++) {
+    const t = ((i / lineCount) + (frame * speed * 0.00035)) % 1;
+    const y = HORIZON_Y + (TRACK_NEAR_Y - HORIZON_Y) * (t * t);
+    const xl = trackLeft(t);
+    const xr = trackRight(t);
+    mc.globalAlpha = 0.15 + t * 0.65;
+    mc.lineWidth = 0.5 + t * 1.5;
+    mc.beginPath();
+    mc.moveTo(xl, y);
+    mc.lineTo(xr, y);
+    mc.stroke();
+  }
+
+  // vertical lines
+  const vLines = 9;
+  for (let i = 0; i <= vLines; i++) {
+    const fx = (i / vLines) * 2 - 1; // -1 to 1
+    const xNear = W/2 + fx * TRACK_W_NEAR/2;
+    const xFar  = W/2 + fx * TRACK_W_FAR/2;
+    mc.globalAlpha = 0.35;
+    mc.lineWidth = 0.8;
+    mc.beginPath();
+    mc.moveTo(xFar, HORIZON_Y);
+    mc.lineTo(xNear, TRACK_NEAR_Y);
+    mc.stroke();
+  }
+
+  mc.globalAlpha = 1;
+}
+
+function drawBall() {
+  const r = BALL_R;
+  mc.strokeStyle = '#00ff41';
+  mc.lineWidth = 2;
+  mc.globalAlpha = 1;
+
+  // sphere grid lines (wireframe ball)
+  const latLines = 6, lonLines = 8;
+  mc.save();
+  mc.beginPath();
+  mc.arc(ballX, BALL_Y, r, 0, Math.PI*2);
+  mc.clip();
+
+  for (let i = 0; i <= latLines; i++) {
+    const ay = -r + (2*r/latLines)*i;
+    const ar = Math.sqrt(Math.max(0, r*r - ay*ay));
+    mc.beginPath();
+    mc.ellipse(ballX, BALL_Y + ay, ar, ar * 0.18, 0, 0, Math.PI*2);
+    mc.globalAlpha = 0.9;
+    mc.stroke();
+  }
+  for (let i = 0; i < lonLines; i++) {
+    const angle = (i / lonLines) * Math.PI + (frame * 0.01);
+    mc.beginPath();
+    mc.ellipse(ballX, BALL_Y, r * Math.abs(Math.cos(angle)), r, Math.PI/2, 0, Math.PI*2);
+    mc.globalAlpha = 0.7;
+    mc.stroke();
+  }
+  mc.restore();
+
+  mc.beginPath();
+  mc.arc(ballX, BALL_Y, r, 0, Math.PI*2);
+  mc.globalAlpha = 1;
+  mc.lineWidth = 2.5;
+  mc.stroke();
+
+  // glow
+  mc.shadowColor = '#00ff41';
+  mc.shadowBlur = 18;
+  mc.beginPath();
+  mc.arc(ballX, BALL_Y, r, 0, Math.PI*2);
+  mc.stroke();
+  mc.shadowBlur = 0;
+}
+
+function drawObstacle(o) {
+  if (o.z < 0.01 || o.z > 1.05) return;
+  const z = o.z;
+  const y = perspY(z);
+  const tl = trackLeft(z), tr = trackRight(z);
+  const tw = tr - tl;
+
+  const ox = tl + tw * o.lx;
+  const ow = tw * o.w;
+  const oh = tw * 0.08;
+
+  // wireframe block
+  const depth = oh * 0.8;
+  mc.globalAlpha = 0.4 + z * 0.5;
+  mc.strokeStyle = '#ff2244';
+  mc.lineWidth = 1 + z * 1.5;
+
+  // top face
+  mc.beginPath();
+  mc.rect(ox, y - oh, ow, oh);
+  mc.stroke();
+
+  // depth lines
+  if (z > 0.3) {
+    mc.beginPath();
+    mc.moveTo(ox, y - oh); mc.lineTo(ox + depth*0.3, y - oh - depth);
+    mc.moveTo(ox + ow, y - oh); mc.lineTo(ox + ow + depth*0.3, y - oh - depth);
+    mc.moveTo(ox, y); mc.lineTo(ox + depth*0.3, y - depth);
+    mc.moveTo(ox + ow, y); mc.lineTo(ox + ow + depth*0.3, y - depth);
+    mc.stroke();
+    mc.beginPath();
+    mc.moveTo(ox + depth*0.3, y - oh - depth);
+    mc.lineTo(ox + ow + depth*0.3, y - oh - depth);
+    mc.lineTo(ox + ow + depth*0.3, y - depth);
+    mc.stroke();
+  }
+  mc.globalAlpha = 1;
+}
+
+function drawParticles() {
+  for (const p of particles) {
+    mc.globalAlpha = p.life;
+    mc.strokeStyle = p.color;
+    mc.lineWidth = 1.5;
+    mc.beginPath();
+    mc.moveTo(p.x, p.y);
+    mc.lineTo(p.x + p.vx * 3, p.y + p.vy * 3);
+    mc.stroke();
+  }
+  mc.globalAlpha = 1;
+}
+
+// ─── OBSTACLE SPAWNING ────────────────────────────────────────────────────────
+function spawnObstacle() {
+  const types = ['single', 'double', 'gate'];
+  const t = types[Math.floor(Math.random() * types.length)];
+  const COLS = 4;
+  if (t === 'single') {
+    const col = Math.floor(Math.random() * COLS);
+    obstacles.push({ z: 0.02, lx: col / COLS + 0.01, w: 1/COLS - 0.02, lane: col });
+  } else if (t === 'double') {
+    const col = Math.floor(Math.random() * (COLS - 1));
+    obstacles.push({ z: 0.02, lx: col / COLS + 0.01, w: 2/COLS - 0.02, lane: col });
+  } else {
+    const gap = Math.floor(Math.random() * COLS);
+    for (let c = 0; c < COLS; c++) {
+      if (c !== gap) obstacles.push({ z: 0.02, lx: c/COLS + 0.01, w: 1/COLS - 0.02, lane: c });
+    }
+  }
+}
+
+// ─── COLLISION ────────────────────────────────────────────────────────────────
+// The ball sits visually at (ballX, BALL_Y). BALL_Y = H*0.70.
+// perspY(z) = HORIZON_Y + (TRACK_NEAR_Y - HORIZON_Y)*z
+// So BALL_Z = the z where perspY(z) == BALL_Y
+const BALL_Z = (BALL_Y - HORIZON_Y) / (TRACK_NEAR_Y - HORIZON_Y);
+
+function checkCollision() {
+  for (const o of obstacles) {
+    // Only test when obstacle is at the same z-depth as the ball
+    if (o.z < BALL_Z - 0.055 || o.z > BALL_Z + 0.055) continue;
+
+    // Compute obstacle's screen x-span at its current z
+    const tl = trackLeft(o.z), tr = trackRight(o.z);
+    const tw  = tr - tl;
+    const oLeft  = tl + tw * o.lx;
+    const oRight = oLeft + tw * o.w;
+
+    // Ball x-span (shrunk slightly for fairness)
+    const bLeft  = ballX - BALL_R * 0.42;
+    const bRight = ballX + BALL_R * 0.42;
+
+    if (bRight > oLeft && bLeft < oRight) return true;
+  }
+  return false;
+}
+
+function emitParticles(x, y) {
+  for (let i = 0; i < 24; i++) {
+    const a = Math.random() * Math.PI * 2;
+    const s = 2 + Math.random() * 5;
+    particles.push({ x, y, vx: Math.cos(a)*s, vy: Math.sin(a)*s, life: 1, color: '#00ff41' });
+  }
+}
+
+// ─── MAIN LOOP ────────────────────────────────────────────────────────────────
+function gameLoop() {
+  if (gameState === 'countdown') {
+    drawScene();
+    drawCountdown();
+    requestAnimationFrame(gameLoop);
+    return;
+  }
+  if (gameState !== 'playing') { requestAnimationFrame(gameLoop); return; }
+
+  frame++;
+  speed = 4.5 + score * 0.0012;
+
+  // Input
+  const accel = 0.010;
+  if (leftDown)  ballVX -= accel;
+  if (rightDown) ballVX += accel;
+  ballVX *= 0.75;
+  ballX += ballVX * W * 0.32;
+
+  // clamp to track
+  const tl = W/2 - (trackRight(1) - W/2) * 0.72 + BALL_R;
+  const tr = W/2 + (trackRight(1) - W/2) * 0.72 - BALL_R;
+  if (ballX < tl) { ballX = tl; ballVX = Math.abs(ballVX) * 0.3; }
+  if (ballX > tr) { ballX = tr; ballVX = -Math.abs(ballVX) * 0.3; }
+
+  // scroll obstacles
+  const zStep = speed * 0.0008;
+  for (const o of obstacles) o.z += zStep;
+  obstacles = obstacles.filter(o => o.z < 1.1);
+
+  // update particles
+  for (const p of particles) {
+    p.x += p.vx; p.y += p.vy;
+    p.vx *= 0.92; p.vy *= 0.92;
+    p.life -= 0.03;
+  }
+  particles = particles.filter(p => p.life > 0);
+
+  // spawn
+  const spawnInterval = Math.max(55, 120 - score * 0.02);
+  if (frame % Math.floor(spawnInterval) === 0) spawnObstacle();
+
+  // collision
+  if (checkCollision()) {
+    emitParticles(ballX, BALL_Y);
+    deathFlash = 1;
+    if (score > best) best = score;
+    bestEl.textContent = best;
+    gameState = 'gameover';
+    document.getElementById('gameover').classList.add('active');
+    document.getElementById('goScore').textContent = `SCORE: ${score}   BEST: ${best}`;
+    requestAnimationFrame(gameLoop);
+    return;
+  }
+
+  // score
+  score++;
+  scoreEl.textContent = score;
+  nextEl.textContent = nextTrialScore - score > 0 ? (nextTrialScore - score) : '--';
+
+  // trigger minigame
+  if (score >= nextTrialScore && !mgActive) {
+    mgActive = true;
+    gameState = 'minigame';
+    triggerMinigame();
+  }
+
+  drawScene();
+  requestAnimationFrame(gameLoop);
+}
+
+// ─── UI REFS ──────────────────────────────────────────────────────────────────
+const scoreEl = document.getElementById('scoreVal');
+const nextEl  = document.getElementById('nextVal');
+const bestEl  = document.getElementById('bestVal');
+
+// ─── INPUT ────────────────────────────────────────────────────────────────────
+document.addEventListener('keydown', e => {
+  if (e.key === 'ArrowLeft'  || e.key === 'a') leftDown  = true;
+  if (e.key === 'ArrowRight' || e.key === 'd') rightDown = true;
+});
+document.addEventListener('keyup', e => {
+  if (e.key === 'ArrowLeft'  || e.key === 'a') leftDown  = false;
+  if (e.key === 'ArrowRight' || e.key === 'd') rightDown = false;
+});
+
+document.getElementById('startBtn').addEventListener('click', startGame);
+document.getElementById('restartBtn').addEventListener('click', () => {
+  document.getElementById('gameover').classList.remove('active');
+  startGame();
+});
+
+function startGame() {
+  document.getElementById('overlay').style.display = 'none';
+  score = 0; frame = 0; speed = 4.5;
+  ballX = W/2; ballVX = 0;
+  obstacles = []; particles = [];
+  nextTrialScore = 1000; trialCount = 0; mgActive = false; mgQueue = [];
+  shuffleMgQueue();
+  updatePips();
+  document.getElementById('mg-progress').classList.add('visible');
+  gameState = 'playing';
+  scoreEl.textContent = 0;
+  nextEl.textContent = 1000;
+}
+
+// ─── MINIGAME SYSTEM ──────────────────────────────────────────────────────────
+const mgTypes = ['memory', 'maze', 'dodger'];
+let mgQueue = [];
+
+function shuffleMgQueue() {
+  // Fisher-Yates shuffle
+  const arr = [...mgTypes];
+  for (let i = arr.length - 1; i > 0; i--) {
+    const j = Math.floor(Math.random() * (i + 1));
+    [arr[i], arr[j]] = [arr[j], arr[i]];
+  }
+  mgQueue = arr;
+}
+
+function triggerMinigame() {
+  if (mgQueue.length === 0) shuffleMgQueue();
+  const type = mgQueue.pop();
+  const overlay = document.getElementById('minigame-overlay');
+  const resultEl = document.getElementById('mg-result');
+  resultEl.textContent = '';
+  resultEl.className = '';
+  overlay.classList.add('active');
+
+  updatePips();
+
+  if (type === 'memory') launchMemory(onMinigameEnd);
+  else if (type === 'maze') launchMaze(onMinigameEnd);
+  else launchDodger(onMinigameEnd);
+}
+
+let countdownVal = 0;
+let countdownRaf = null;
+
+function startCountdown(onDone) {
+  countdownVal = 3;
+  const startTime = Date.now();
+
+  function tick() {
+    const elapsed = Date.now() - startTime;
+    countdownVal = Math.max(0, 3 - Math.floor(elapsed / 1000));
+    if (elapsed >= 3000) {
+      countdownVal = 0;
+      onDone();
+    } else {
+      countdownRaf = requestAnimationFrame(tick);
+    }
+  }
+  countdownRaf = requestAnimationFrame(tick);
+}
+
+function drawCountdown() {
+  if (gameState !== 'countdown' || countdownVal <= 0) return;
+  const num = countdownVal;
+  const cx = W / 2, cy = 52;
+  mc.save();
+  mc.font = '700 28px Orbitron, monospace';
+  mc.textAlign = 'center';
+  mc.textBaseline = 'middle';
+  mc.fillStyle = '#00ff41';
+  mc.shadowColor = '#00ff41';
+  mc.shadowBlur = 18;
+  mc.fillText(num, cx, cy);
+  mc.font = '11px Share Tech Mono';
+  mc.shadowBlur = 0;
+  mc.fillStyle = '#00ff4177';
+  mc.fillText('RESUMING', cx, cy + 22);
+  mc.restore();
+}
+
+function onMinigameEnd(win) {
+  const resultEl = document.getElementById('mg-result');
+  const overlay = document.getElementById('minigame-overlay');
+
+  if (win) {
+    resultEl.textContent = '— ACCESS GRANTED —';
+    resultEl.className = 'win';
+    trialCount++;
+    updatePips();
+    setTimeout(() => {
+      overlay.classList.remove('active');
+      nextTrialScore = score + 1000;
+      mgActive = false;
+      gameState = 'countdown';
+      startCountdown(() => { gameState = 'playing'; });
+    }, 1800);
+  } else {
+    resultEl.textContent = '— ACCESS DENIED — TERMINATED —';
+    resultEl.className = 'lose';
+    if (score > best) best = score;
+    bestEl.textContent = best;
+    setTimeout(() => {
+      overlay.classList.remove('active');
+      gameState = 'gameover';
+      document.getElementById('gameover').classList.add('active');
+      document.getElementById('goScore').textContent = `SCORE: ${score}   BEST: ${best}`;
+    }, 2000);
+  }
+}
+
+function updatePips() {
+  for (let i = 0; i < 3; i++) {
+    const pip = document.getElementById('pip' + i);
+    pip.classList.toggle('done', i < trialCount % 3);
+  }
+}
+
+// ─── MINIGAME 1: MEMORY ───────────────────────────────────────────────────────
+function launchMemory(callback) {
+  // 3 fixed levels: lengths 3, 4, 5 — flash durations 1500, 1250, 1000 ms
+  const LEVELS = [
+    { len: 3, flashMs: 1500 },
+    { len: 4, flashMs: 1250 },
+    { len: 5, flashMs: 1000 },
+  ];
+  let currentLevel = 0;
+
+  document.getElementById('mg-title').textContent = 'MEMORY TRIAL';
+  document.getElementById('mg-desc').textContent = 'REPEAT THE SEQUENCE — 3 LEVELS';
+
+  const mgC = document.getElementById('mg-canvas');
+  mgC.width = 400; mgC.height = 320;
+  const ctx = mgC.getContext('2d');
+
+  const keys = ['←', '→', '↑', '↓'];
+  const keyMap = { ArrowLeft:'←', ArrowRight:'→', ArrowUp:'↑', ArrowDown:'↓' };
+
+  let seq = [], phase = 'show', showIdx = 0, inputSeq = [];
+  let flashKey = null, done = false;
+  let inputTimerStart = 0, inputTimerRaf = null;
+
+  function buildLevel(lvl) {
+    const { len } = LEVELS[lvl];
+    seq = Array.from({length: len}, () => keys[Math.floor(Math.random()*4)]);
+    phase = 'show'; showIdx = 0; inputSeq = []; flashKey = null;
+  }
+
+  // ── draw ──
+  function drawMemory() {
+    ctx.fillStyle = '#000';
+    ctx.fillRect(0, 0, 400, 320);
+
+    // level indicator
+    ctx.fillStyle = '#00ff4166';
+    ctx.font = '10px Share Tech Mono';
+    ctx.textAlign = 'left'; ctx.textBaseline = 'top';
+    ctx.globalAlpha = 1;
+    for (let i = 0; i < LEVELS.length; i++) {
+      ctx.fillStyle = i < currentLevel ? '#00ff41' : i === currentLevel ? '#00ff41aa' : '#00ff4133';
+      ctx.fillText(`LVL ${i+1}`, 12 + i*64, 8);
+    }
+
+    // arrow buttons — D-pad layout
+    const btnDefs = [
+      { k:'↑', x:200, y:90  },
+      { k:'←', x:148, y:138 },
+      { k:'→', x:252, y:138 },
+      { k:'↓', x:200, y:186 },
+    ];
+    for (const b of btnDefs) {
+      const lit = flashKey === b.k || (phase==='input' && inputSeq[inputSeq.length-1] === b.k);
+      ctx.globalAlpha = lit ? 1 : 0.45;
+      ctx.fillStyle   = lit ? '#00ff4155' : '#001a00';
+      ctx.strokeStyle = lit ? '#fff' : '#00ff41';
+      ctx.lineWidth   = lit ? 2.5 : 1.2;
+      ctx.beginPath();
+      ctx.roundRect(b.x-26, b.y-26, 52, 52, 7);
+      ctx.fill(); ctx.stroke();
+      ctx.fillStyle = lit ? '#fff' : '#00ff41';
+      ctx.font = '26px Share Tech Mono';
+      ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+      ctx.globalAlpha = 1;
+      ctx.fillText(b.k, b.x, b.y);
+    }
+
+    // sequence progress dots
+    const len = LEVELS[currentLevel].len;
+    const dotY = 232;
+    for (let i = 0; i < len; i++) {
+      const filled = phase === 'show' ? i < showIdx : i < inputSeq.length;
+      ctx.globalAlpha = 1;
+      ctx.strokeStyle = '#00ff41';
+      ctx.lineWidth = 1;
+      ctx.fillStyle = filled ? '#00ff41' : 'transparent';
+      ctx.beginPath();
+      ctx.arc(200 - (len-1)*12 + i*24, dotY, 7, 0, Math.PI*2);
+      ctx.fill(); ctx.stroke();
+    }
+
+    // status / timer
+    if (phase === 'show') {
+      ctx.fillStyle = '#00ff4188';
+      ctx.font = '11px Share Tech Mono';
+      ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+      ctx.globalAlpha = 1;
+      ctx.fillText('OBSERVE SEQUENCE...', 200, 262);
+    } else {
+      // countdown bar — 10 seconds
+      const elapsed = Date.now() - inputTimerStart;
+      const frac = Math.max(0, 1 - elapsed / 10000);
+      ctx.globalAlpha = 1;
+      ctx.fillStyle = '#00ff4122';
+      ctx.fillRect(40, 255, 320, 6);
+      ctx.fillStyle = frac > 0.3 ? '#00ff41' : '#ff2244';
+      ctx.fillRect(40, 255, 320 * frac, 6);
+      ctx.fillStyle = '#00ff4188';
+      ctx.font = '11px Share Tech Mono';
+      ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+      ctx.fillText(`INPUT ${inputSeq.length}/${len} — ${Math.ceil((10000-elapsed)/1000)}s`, 200, 275);
+    }
+
+    // level label at bottom
+    ctx.fillStyle = '#00ff4144';
+    ctx.font = '10px Share Tech Mono';
+    ctx.textAlign = 'center'; ctx.textBaseline = 'bottom';
+    ctx.fillText(`LEVEL ${currentLevel+1} OF 3`, 200, 316);
+  }
+
+  // ── timer tick (runs during input phase) ──
+  function tickTimer() {
+    if (done) return;
+    drawMemory();
+    if (Date.now() - inputTimerStart >= 10000) {
+      done = true;
+      document.removeEventListener('keydown', onKey);
+      cancelAnimationFrame(inputTimerRaf);
+      setTimeout(() => callback(false), 400);
+      return;
+    }
+    inputTimerRaf = requestAnimationFrame(tickTimer);
+  }
+
+  // ── show sequence ──
+  function showSequence() {
+    if (done) return;
+    const flashMs = LEVELS[currentLevel].flashMs;
+    const gapMs   = Math.floor(flashMs * 0.22);
+    if (showIdx >= seq.length) {
+      phase = 'input';
+      flashKey = null;
+      inputTimerStart = Date.now();
+      drawMemory();
+      document.addEventListener('keydown', onKey);
+      inputTimerRaf = requestAnimationFrame(tickTimer);
+      return;
+    }
+    flashKey = seq[showIdx];
+    drawMemory();
+    setTimeout(() => {
+      if (done) return;
+      flashKey = null;
+      drawMemory();
+      showIdx++;
+      setTimeout(showSequence, gapMs);
+    }, flashMs);
+  }
+
+  // ── key input ──
+  function onKey(e) {
+    if (done || phase !== 'input') return;
+    const k = keyMap[e.key];
+    if (!k) return;
+    inputSeq.push(k);
+    flashKey = k;
+    drawMemory();
+    setTimeout(() => { if (!done) { flashKey = null; drawMemory(); } }, 180);
+
+    // wrong key
+    if (inputSeq[inputSeq.length-1] !== seq[inputSeq.length-1]) {
+      done = true;
+      document.removeEventListener('keydown', onKey);
+      cancelAnimationFrame(inputTimerRaf);
+      setTimeout(() => callback(false), 500);
+      return;
+    }
+
+    // completed this level's sequence
+    if (inputSeq.length === seq.length) {
+      document.removeEventListener('keydown', onKey);
+      cancelAnimationFrame(inputTimerRaf);
+      currentLevel++;
+      if (currentLevel >= LEVELS.length) {
+        // all 3 levels passed
+        done = true;
+        setTimeout(() => callback(true), 500);
+      } else {
+        // next level — brief pause then re-show
+        phase = 'show'; showIdx = 0; inputSeq = []; flashKey = null;
+        buildLevel(currentLevel);
+        drawMemory();
+        setTimeout(showSequence, 1000);
+      }
+    }
+  }
+
+  buildLevel(0);
+  drawMemory();
+  setTimeout(showSequence, 900);
+}
+
+// ─── MINIGAME 2: MAZE ─────────────────────────────────────────────────────────
+function launchMaze(callback) {
+  // Pick one of 3 variants randomly with equal chance
+  const roll = Math.random();
+  let COLS, ROWS, TIME_LIMIT, variantLabel;
+  if (roll < 0.333) {
+    // SMALL — original size, standard time
+    COLS = 10; ROWS = 8; TIME_LIMIT = 15000;
+    variantLabel = 'SMALL MAP — 15s';
+  } else if (roll < 0.666) {
+    // STANDARD — current size, standard time
+    COLS = 14; ROWS = 11; TIME_LIMIT = 15000;
+    variantLabel = 'STANDARD MAP — 15s';
+  } else {
+    // LARGE — current size, 30s (2x time)
+    COLS = 14; ROWS = 11; TIME_LIMIT = 30000;
+    variantLabel = 'LARGE MAP — 30s';
+  }
+
+  document.getElementById('mg-title').textContent = 'MAZE TRIAL';
+  document.getElementById('mg-desc').textContent = variantLabel;
+
+  const mgC = document.getElementById('mg-canvas');
+  mgC.width = 400; mgC.height = 320;
+  const ctx = mgC.getContext('2d');
+
+  const CW = Math.floor(360 / COLS), CH = Math.floor(286 / ROWS);
+  const OX = (400 - COLS*CW) / 2, OY = 24;
+
+  // DFS maze generation — always fully solvable
+  const cells = Array.from({length:ROWS}, () =>
+    Array.from({length:COLS}, () => ({
+      visited:false, walls:{top:true,right:true,bottom:true,left:true}
+    }))
+  );
+
+  function carve(r, c) {
+    cells[r][c].visited = true;
+    const dirs = [
+      {dr:-1,dc:0,w:'top',ow:'bottom'},
+      {dr:1, dc:0,w:'bottom',ow:'top'},
+      {dr:0, dc:-1,w:'left',ow:'right'},
+      {dr:0, dc:1,w:'right',ow:'left'}
+    ];
+    dirs.sort(() => Math.random()-0.5);
+    for (const d of dirs) {
+      const nr=r+d.dr, nc=c+d.dc;
+      if (nr>=0&&nr<ROWS&&nc>=0&&nc<COLS&&!cells[nr][nc].visited) {
+        cells[r][c].walls[d.w] = false;
+        cells[nr][nc].walls[d.ow] = false;
+        carve(nr, nc);
+      }
+    }
+  }
+  carve(0, 0);
+
+  const startTime = Date.now();
+  let playerR=0, playerC=0;
+  const exitR=ROWS-1, exitC=COLS-1;
+  let done=false, animFrame;
+
+  function drawMaze() {
+    ctx.fillStyle='#000';
+    ctx.fillRect(0,0,400,320);
+
+    // variant label top-left
+    ctx.fillStyle='#00ff4155';
+    ctx.font='9px Share Tech Mono';
+    ctx.textAlign='left'; ctx.textBaseline='top';
+    ctx.globalAlpha=1;
+    ctx.fillText(variantLabel, OX, 0);
+
+    // timer bar
+    const elapsed = Date.now() - startTime;
+    const timeLeft = Math.max(0, (TIME_LIMIT - elapsed) / 1000);
+    const frac = timeLeft / (TIME_LIMIT / 1000);
+    ctx.fillStyle = '#00ff4122';
+    ctx.fillRect(OX, 13, COLS*CW, 5);
+    ctx.fillStyle = frac > 0.35 ? '#00ff41' : '#ff2244';
+    ctx.fillRect(OX, 13, COLS*CW*frac, 5);
+    ctx.fillStyle = frac > 0.35 ? '#00ff4188' : '#ff224488';
+    ctx.font='9px Share Tech Mono';
+    ctx.textAlign='right'; ctx.textBaseline='top';
+    ctx.fillText(timeLeft.toFixed(1)+'s', OX+COLS*CW, 0);
+
+    // maze walls
+    ctx.strokeStyle='#00ff41';
+    ctx.lineWidth=1;
+    for (let r=0;r<ROWS;r++) for (let c=0;c<COLS;c++) {
+      const x=OX+c*CW, y=OY+r*CH;
+      const cell=cells[r][c];
+      ctx.globalAlpha=0.7;
+      if(cell.walls.top)   {ctx.beginPath();ctx.moveTo(x,y);ctx.lineTo(x+CW,y);ctx.stroke();}
+      if(cell.walls.left)  {ctx.beginPath();ctx.moveTo(x,y);ctx.lineTo(x,y+CH);ctx.stroke();}
+      if(r===ROWS-1&&cell.walls.bottom){ctx.beginPath();ctx.moveTo(x,y+CH);ctx.lineTo(x+CW,y+CH);ctx.stroke();}
+      if(c===COLS-1&&cell.walls.right) {ctx.beginPath();ctx.moveTo(x+CW,y);ctx.lineTo(x+CW,y+CH);ctx.stroke();}
+    }
+
+    // exit marker
+    ctx.globalAlpha=1;
+    ctx.fillStyle='#00ff41';
+    ctx.font=`${Math.min(CW,CH)-4}px Share Tech Mono`;
+    ctx.textAlign='center'; ctx.textBaseline='middle';
+    ctx.fillText('X', OX+exitC*CW+CW/2, OY+exitR*CH+CH/2);
+
+    // player dot
+    ctx.globalAlpha=1;
+    const pr = Math.max(3, Math.floor(Math.min(CW,CH)*0.28));
+    ctx.shadowColor='#00ff41'; ctx.shadowBlur=10;
+    ctx.strokeStyle='#00ff41'; ctx.lineWidth=2;
+    ctx.beginPath();
+    ctx.arc(OX+playerC*CW+CW/2, OY+playerR*CH+CH/2, pr, 0, Math.PI*2);
+    ctx.stroke();
+    ctx.fillStyle='#00ff4166';
+    ctx.fill();
+    ctx.shadowBlur=0;
+    ctx.globalAlpha=1;
+  }
+
+  function loop() {
+    if(done) return;
+    if(Date.now()-startTime >= TIME_LIMIT){
+      done=true;
+      document.removeEventListener('keydown',onKey);
+      drawMaze();
+      setTimeout(()=>callback(false),400);
+      return;
+    }
+    drawMaze();
+    animFrame=requestAnimationFrame(loop);
+  }
+
+  function onKey(e) {
+    if(done) return;
+    const cell=cells[playerR][playerC];
+    if(e.key==='ArrowUp'    &&!cell.walls.top    &&playerR>0)      playerR--;
+    if(e.key==='ArrowDown'  &&!cell.walls.bottom &&playerR<ROWS-1) playerR++;
+    if(e.key==='ArrowLeft'  &&!cell.walls.left   &&playerC>0)      playerC--;
+    if(e.key==='ArrowRight' &&!cell.walls.right  &&playerC<COLS-1) playerC++;
+    if(playerR===exitR&&playerC===exitC){
+      done=true;
+      cancelAnimationFrame(animFrame);
+      document.removeEventListener('keydown',onKey);
+      drawMaze();
+      setTimeout(()=>callback(true),400);
+    }
+  }
+
+  document.addEventListener('keydown',onKey);
+  loop();
+}
+
+// ─── MINIGAME 3: LANE DODGER ──────────────────────────────────────────────────
+function launchDodger(callback) {
+  document.getElementById('mg-title').textContent = 'DODGE TRIAL';
+  document.getElementById('mg-desc').textContent = 'SURVIVE TO ESCAPE — ← → KEYS';
+
+  const mgC = document.getElementById('mg-canvas');
+  mgC.width = 400; mgC.height = 300;
+  const ctx = mgC.getContext('2d');
+
+  const TARGET = 500 + Math.floor(Math.random()*250);
+  const LANES = 6, LW = 400/LANES;
+  let dScore=0, dSpeed=3, dFrame=0;
+  let dBallLane=2, dBallX=LW*2.5;
+  let dObs=[], dDone=false;
+  let dLeft=false, dRight=false;
+  let dMoveCool=0;
+  let animFrame;
+
+  function drawDodger() {
+    ctx.fillStyle='#000';
+    ctx.fillRect(0,0,400,300);
+
+    ctx.strokeStyle='#00ff41';
+    ctx.lineWidth=0.5;
+    ctx.globalAlpha=0.2;
+    for(let i=1;i<LANES;i++){
+      ctx.beginPath();ctx.moveTo(i*LW,0);ctx.lineTo(i*LW,300);ctx.stroke();
+    }
+    ctx.globalAlpha=1;
+
+    for(const o of dObs){
+      ctx.fillStyle='#ff2244';
+      ctx.globalAlpha=0.85;
+      ctx.fillRect(o.lane*LW+2, o.y, LW-4, 18);
+      ctx.strokeStyle='#ff4466';
+      ctx.lineWidth=1;
+      ctx.strokeRect(o.lane*LW+2, o.y, LW-4, 18);
+    }
+    ctx.globalAlpha=1;
+
+    // ball
+    ctx.strokeStyle='#00ff41';
+    ctx.lineWidth=2;
+    ctx.shadowColor='#00ff41'; ctx.shadowBlur=12;
+    ctx.beginPath();
+    ctx.arc(dBallX, 240, 14, 0, Math.PI*2);
+    ctx.stroke();
+    ctx.shadowBlur=0;
+
+    // score bar
+    const pct = Math.min(dScore/TARGET, 1);
+    ctx.fillStyle='#00ff4122';
+    ctx.fillRect(10,10,380,8);
+    ctx.fillStyle='#00ff41';
+    ctx.fillRect(10,10,380*pct,8);
+    ctx.strokeStyle='#00ff4144';
+    ctx.lineWidth=0.5;
+    ctx.strokeRect(10,10,380,8);
+
+    ctx.fillStyle='#00ff4188';
+    ctx.font='10px Share Tech Mono';
+    ctx.textAlign='center'; ctx.textBaseline='top';
+    ctx.fillText(`${dScore} / ${TARGET}`, 200, 22);
+  }
+
+  function dLoop() {
+    if(dDone) return;
+    dFrame++; dScore++;
+    dSpeed = 3 + dScore*0.004;
+    if(dMoveCool>0) dMoveCool--;
+
+    if(dLeft  && dMoveCool===0){ dBallLane=Math.max(0,dBallLane-1); dMoveCool=8; }
+    if(dRight && dMoveCool===0){ dBallLane=Math.min(LANES-1,dBallLane+1); dMoveCool=8; }
+    dBallX += (dBallLane*LW+LW/2 - dBallX)*0.25;
+
+    if(dFrame % Math.max(20,50-Math.floor(dScore*0.03))===0){
+      const lane=Math.floor(Math.random()*LANES);
+      dObs.push({lane, y:-20});
+    }
+    for(const o of dObs) o.y += dSpeed;
+    dObs = dObs.filter(o=>o.y<320);
+
+    // collision
+    for(const o of dObs){
+      if(o.lane===dBallLane && o.y+18>226 && o.y<254){
+        dDone=true;
+        cancelAnimationFrame(animFrame);
+        document.removeEventListener('keydown',dKey);
+        document.removeEventListener('keyup',dKeyUp);
+        drawDodger();
+        setTimeout(()=>callback(false),400);
+        return;
+      }
+    }
+
+    if(dScore>=TARGET){
+      dDone=true;
+      cancelAnimationFrame(animFrame);
+      document.removeEventListener('keydown',dKey);
+      document.removeEventListener('keyup',dKeyUp);
+      drawDodger();
+      setTimeout(()=>callback(true),400);
+      return;
+    }
+
+    drawDodger();
+    animFrame=requestAnimationFrame(dLoop);
+  }
+
+  function dKey(e){
+    if(e.key==='ArrowLeft'||e.key==='a') dLeft=true;
+    if(e.key==='ArrowRight'||e.key==='d') dRight=true;
+  }
+  function dKeyUp(e){
+    if(e.key==='ArrowLeft'||e.key==='a') dLeft=false;
+    if(e.key==='ArrowRight'||e.key==='d') dRight=false;
+  }
+  document.addEventListener('keydown',dKey);
+  document.addEventListener('keyup',dKeyUp);
+  dLoop();
+}
+
+// ─── KICK OFF ─────────────────────────────────────────────────────────────────
+initTrack();
+drawScene();
+requestAnimationFrame(gameLoop);
+</script>
+</body>
+</html>
